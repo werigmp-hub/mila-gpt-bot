@@ -1,53 +1,71 @@
-import telebot
-import requests
-import time
-from flask import Flask
-import threading
 import os
+import threading
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
+import openai
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENAI_KEY = os.getenv("OPENAI_KEY")
+# -------------------------
+# 1️⃣ Получаем ключи из Environment
+# -------------------------
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
-bot = telebot.TeleBot(TELEGRAM_TOKEN)
+if not TELEGRAM_TOKEN:
+    raise ValueError("Bot token is not defined! Set TELEGRAM_BOT_TOKEN in Environment variables.")
+if not OPENAI_KEY:
+    raise ValueError("OpenAI API key is not defined! Set OPENAI_API_KEY in Environment variables.")
+
+# -------------------------
+# 2️⃣ Настраиваем OpenAI
+# -------------------------
+openai.api_key = OPENAI_KEY
+
+def ask_openai(question: str) -> str:
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=question,
+        max_tokens=150
+    )
+    return response.choices[0].text.strip()
+
+# -------------------------
+# 3️⃣ Настраиваем Telegram бота
+# -------------------------
+bot = Bot(token=TELEGRAM_TOKEN)
+updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Привет! Я ваш бот с OpenAI 🤖")
+
+def handle_message(update: Update, context: CallbackContext):
+    user_text = update.message.text
+    answer = ask_openai(user_text)
+    update.message.reply_text(answer)
+
+updater.dispatcher.add_handler(CommandHandler("start", start))
+updater.dispatcher.add_handler(CommandHandler("help", start))  # Для примера
+updater.dispatcher.add_handler(updater.dispatcher.add_handler(
+    lambda update, context: handle_message(update, context)
+))
+
+# Запуск polling в отдельном потоке
+threading.Thread(target=updater.start_polling, daemon=True).start()
+
+# -------------------------
+# 4️⃣ Настраиваем Flask
+# -------------------------
 app = Flask(__name__)
 
-@app.route('/')
+@app.route("/")
 def home():
-    return "Mila bot is running!"
+    return "Bot is running! ✅"
 
-def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+# -------------------------
+# 5️⃣ Запуск сервера
+# -------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, "Привет! Я Мила 🤖 — твой ИИ-помощник. Задай вопрос!")
-
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_KEY}"
-        }
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": message.text}]
-        }
-        r = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data)
-        response = r.json()["choices"][0]["message"]["content"]
-        bot.send_message(message.chat.id, response)
-    except Exception as e:
-        bot.send_message(message.chat.id, f"Ошибка: {e}")
-
-def run_bot():
-    while True:
-        try:
-            bot.polling(non_stop=True)
-        except Exception as e:
-            print(f"Ошибка polling: {e}")
-            time.sleep(5)
-
-# Запускаем Flask и бота в разных потоках
-threading.Thread(target=run_flask).start()
-run_bot()
 

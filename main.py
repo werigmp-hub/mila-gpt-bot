@@ -4,7 +4,7 @@ import telegram
 import openai
 
 # -------------------------
-# 1️⃣ Переменные окружения
+# Переменные окружения
 # -------------------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
@@ -18,7 +18,7 @@ openai.api_key = OPENAI_KEY
 app = Flask(__name__)
 
 # -------------------------
-# 2️⃣ Webhook для сообщений
+# Webhook для Telegram
 # -------------------------
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 def webhook():
@@ -26,6 +26,7 @@ def webhook():
     chat_id = update.message.chat.id
     text = update.message.text
 
+    # Ответ от OpenAI
     response = openai.Completion.create(
         model="text-davinci-003",
         prompt=text,
@@ -37,13 +38,13 @@ def webhook():
 
 @app.route("/")
 def index():
-    return "Бот работает!"
+    return "Бот работает! ✅"
 
 # -------------------------
-# 3️⃣ Устанавливаем Webhook и запускаем Flask
+# Настройка Webhook и запуск Flask
 # -------------------------
 if __name__ == "__main__":
-    url = os.environ.get("RENDER_EXTERNAL_URL")
+    url = os.environ.get("RENDER_EXTERNAL_URL")  # Render задаёт автоматически
     bot.setWebhook(f"{url}/{TELEGRAM_TOKEN}")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
